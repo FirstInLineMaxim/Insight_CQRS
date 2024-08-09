@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CQRS.Database;
 using CQRS.Domains.Products.Models;
+using CQRS.Domains.Products.Commands;
+using CQRS.Extensions;
+using CQRS.Domains.Products.Queries;
 
 namespace CQRS.Controllers
 {
@@ -25,21 +28,19 @@ namespace CQRS.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
         {
-            return await _context.Products.ToListAsync();
+            var query = new GetAllProducts();
+            var list = await HttpContext.SendQuery<GetAllProducts,List<Product>>(query);
+            return Ok(list);
         }
 
         // GET: api/Products/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Product>> GetProduct(Guid id)
+        public async Task<ActionResult<Product?>> GetProduct(Guid id)
         {
-            var product = await _context.Products.FindAsync(id);
+            var query = new GetProductById(id);
+            var product = await HttpContext.SendQuery<GetProductById,Product?>(query);
 
-            if (product == null)
-            {
-                return NotFound();
-            }
-
-            return product;
+            return Ok(product);
         }
 
         // PUT: api/Products/5
@@ -76,12 +77,15 @@ namespace CQRS.Controllers
         // POST: api/Products
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Product>> PostProduct(Product product)
+        public async Task<ActionResult<Product>> PostProduct(RegisterPrudctRequest request)
         {
-            _context.Products.Add(product);
-            await _context.SaveChangesAsync();
+            var (name,description)= request;
+            var productId = Guid.NewGuid();
+            var command = new RegisterProduct(productId,name,description);
 
-            return CreatedAtAction("GetProduct", new { id = product.Id }, product);
+            await HttpContext.SendCommand(command);
+
+            return CreatedAtAction(nameof(GetProduct),new {id=productId},productId);
         }
 
         // DELETE: api/Products/5
